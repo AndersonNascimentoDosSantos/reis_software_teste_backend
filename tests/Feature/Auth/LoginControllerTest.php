@@ -77,7 +77,7 @@ class LoginControllerTest extends TestCase
             ->assertJsonValidationErrors(['email'])
             ->assertJson([
                 'errors' => [
-                    'email' => ['The provided credentials are incorrect.']
+                    'email' => ['As credenciais fornecidas estão incorretas.']
                 ]
             ]);
     }
@@ -101,7 +101,7 @@ class LoginControllerTest extends TestCase
             ->assertJsonValidationErrors(['email'])
             ->assertJson([
                 'errors' => [
-                    'email' => ['The provided credentials are incorrect.']
+                    'email' => ['As credenciais fornecidas estão incorretas.']
                 ]
             ]);
     }
@@ -120,7 +120,7 @@ class LoginControllerTest extends TestCase
             ->assertJsonValidationErrors(['email'])
             ->assertJson([
                 'errors' => [
-                    'email' => ['The provided credentials are incorrect.']
+                    'email' => ['As credenciais fornecidas estão incorretas.']
                 ]
             ]);
     }

@@ -21,7 +21,7 @@ Route::post('/sanctum/token', function (Request $request) {
 
     if (! $user || ! Hash::check($request->password, $user->password)) {
         throw ValidationException::withMessages([
-            'email' => ['The provided credentials are incorrect.'],
+            'email' => ['As credenciais fornecidas estão incorretas.'],
         ]);
     }
 
@@ -39,13 +39,10 @@ Route::group([
 
 });
 // Rotas de autenticação
-
-
-
-
-
 // Rotas protegidas
 Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('tasks', TaskController::class);
+    Route::post("/tasks/{task}/restore", [TaskController::class, 'restore'])->name('tasks.restore');
+    Route::post("/tasks/trashed", [TaskController::class, 'trashed'])->name('tasks.trashed');
 
 });

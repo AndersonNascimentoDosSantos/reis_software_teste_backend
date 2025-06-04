@@ -11,11 +11,13 @@ API REST desenvolvida para gerenciar tarefas pessoais com sistema de autenticaç
 ### Pré-requisitos
 - Docker e Docker Compose instalados
 - Git
+- PHP 8.1 ou superior (para desenvolvimento local)
+- Composer (para desenvolvimento local)
 
 ### 1. Clonar o repositório
 ```bash
-git clone <url-do-repositorio>
-cd sistema-tarefas
+git clone git@github.com:AndersonNascimentoDosSantos/reis_software_teste_backend.git
+cd reis_softwares_api
 ```
 
 ### 2. Instalar dependências PHP
@@ -76,9 +78,9 @@ sail artisan migrate
 sail artisan db:seed
 ```
 
-## 🚀 Como Executar
+## 🚀 Comandos Úteis do Sail
 
-### Iniciar o ambiente de desenvolvimento
+### Iniciar o ambiente
 ```bash
 sail up -d
 ```
@@ -93,25 +95,31 @@ sail down
 sail logs
 ```
 
-## 🧪 Como Testar
-
-### Executar testes unitários
+### Acessar o shell do container
 ```bash
-sail artisan test
+sail shell
 ```
 
-### Testar com Postman/Insomnia
-Collection disponível em: `/docs/api-collection.json`
+### Executar comandos artisan
+```bash
+sail artisan [comando]
+```
 
-### Acessar Swagger/OpenAPI
-Após inicializar o projeto, acesse:
+### Executar testes
+```bash
+sail test
+```
+
+## 📚 Documentação da API (Swagger)
+
+Após inicializar o projeto, acesse a documentação Swagger em:
 ```
 http://localhost/api/documentation
 ```
 
 O Swagger fornece documentação interativa de todos os endpoints da API, permitindo testar diretamente pela interface web.
 
-## 🔐 Autenticação
+## 🔐 Autenticação com Laravel Sanctum
 
 O projeto utiliza **Laravel Sanctum** para autenticação via tokens pessoais.
 
@@ -121,14 +129,14 @@ O projeto utiliza **Laravel Sanctum** para autenticação via tokens pessoais.
 
 ### Como usar:
 1. Registre um usuário ou faça login
-2. Use o token retornado no header das requisições:
+2. Use o token retornado nas requisições:
 ```
 Authorization: Bearer {seu-token-aqui}
 ```
 
-## 📊 Banco de Dados
+## 📊 Banco de Dados PostgreSQL
 
-**PostgreSQL** é utilizado como banco de dados principal, executando via Docker através do Laravel Sail.
+O projeto utiliza **PostgreSQL** como banco de dados principal, executando via Docker através do Laravel Sail.
 
 ### Configurações padrão:
 - **Host:** pgsql (container Docker)
@@ -149,13 +157,13 @@ sail artisan migrate:fresh --seed
 sail artisan migrate:status
 ```
 
-## 🎯 Endpoints Esperados
+## 🎯 Endpoints da API
 
 ### Autenticação
 - `POST /api/auth/register` - Cadastro
 - `POST /api/auth/login` - Login
 
-### Tarefas (protegidas por JWT)
+### Tarefas (protegidas por Sanctum)
 - `GET /api/tasks` - Listar tarefas
 - `GET /api/tasks?status=completed` - Filtrar por status
 - `POST /api/tasks` - Criar tarefa
@@ -187,14 +195,36 @@ sail artisan migrate:status
 - Middleware para autenticação e autorização
 - Recursos (Resources) para padronização de respostas
 
+### Funcionalidades Implementadas
+
+#### Soft Delete nas Tarefas
+- Implementação do soft delete para manter histórico de tarefas
+- Recuperação de tarefas excluídas quando necessário
+- Filtros automáticos para excluir registros deletados das consultas padrão
+- Endpoint específico para listar tarefas excluídas
+- Endpoint para restaurar tarefas excluídas
+
+#### Validações com Form Requests
+- Validações centralizadas em classes dedicadas
+- Regras de validação específicas para cada operação
+- Mensagens de erro personalizadas e traduzidas
+- Validação de dados antes de atingir o controller
+- Reutilização de regras de validação entre endpoints
+
+#### Testes de Integração
+- Testes de fluxo completo de autenticação
+- Testes de CRUD de tarefas
+- Testes de validação de dados
+- Testes de soft delete e restauração
+- Testes de autorização e permissões
+- Cobertura de cenários de sucesso e erro
+
 ## 🔄 Melhorias Futuras
 
 Com mais tempo disponível, as seguintes melhorias seriam implementadas:
 
 ### Funcionalidades
-- Testes unitários e de integração mais abrangentes
 - Sistema de logs estruturado
-- Soft delete nas tarefas
 - Paginação otimizada
 - Cache para consultas frequentes
 
@@ -209,11 +239,3 @@ Com mais tempo disponível, as seguintes melhorias seriam implementadas:
 - Monitoramento de performance
 - Backup automatizado do banco
 - Environment de staging
-
-## 🤝 Contato
-
-Para dúvidas técnicas ou esclarecimentos sobre implementação, entre em contato através do email fornecido nas instruções do teste.
-
----
-
-**Observação:** Este projeto foi desenvolvido seguindo as melhores práticas do Laravel e focando na entrega das funcionalidades essenciais dentro do prazo estabelecido.

@@ -11,9 +11,11 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\PersonalAccessToken;
+use App\Traits\Loggable;
 
 class LoginController extends Controller
 {
+    use Loggable;
 
     /**
      * @OA\Post(
@@ -53,24 +55,49 @@ class LoginController extends Controller
      */
     public function login(LoginRequest $request): JsonResponse
     {
-//        $request->validate([
-//            'email' => 'required|email',
-//            'password' => 'required',
-//        ]);
+        try {
+            $credentials = $request->validated();
 
-        if (!Auth::attempt($request->only('email', 'password'))) {
-            throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
+            if (!Auth::attempt($credentials)) {
+                $this->logWarning('Tentativa de login falhou', [
+                    'email' => $request->email,
+                    'reason' => 'Credenciais inválidas'
+                ]);
+
+                throw ValidationException::withMessages([
+                    'email' => ['As credenciais fornecidas estão incorretas.'],
+                ]);
+            }
+
+            $user = Auth::user();
+            $token = $user->createToken('auth-token')->plainTextToken;
+
+            $this->logInfo('Login realizado com sucesso', [
+                'user_id' => $user->id,
+                'email' => $user->email
             ]);
+
+            return response()->json([
+                'token' => $token,
+                'user' => $user
+            ]);
+        } catch (ValidationException $e) {
+            $this->logError('Erro de validação no login', [
+                'errors' => $e->errors(),
+                'email' => $request->email
+            ]);
+
+            throw $e;
+        } catch (\Exception $e) {
+            $this->logError('Erro inesperado no login', [
+                'error' => $e->getMessage(),
+                'email' => $request->email
+            ]);
+
+            return response()->json([
+                'message' => 'Ocorreu um erro ao tentar fazer login.'
+            ], 500);
         }
-
-        $user = Auth::user();
-        $token = $user->createToken('auth_token')->plainTextToken;
-
-        return response()->json([
-            'user' => $user,
-            'token' => $token
-        ]);
     }
 
     /**

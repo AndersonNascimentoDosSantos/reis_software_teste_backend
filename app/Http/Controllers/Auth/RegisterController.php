@@ -3,14 +3,16 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\RegisterRequest;
 use App\Models\User;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use App\Traits\Loggable;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\ValidationException;
 
 class RegisterController extends Controller
 {
+    use Loggable;
+
     /**
      * @OA\Post(
      *     path="/api/auth/register",
@@ -22,8 +24,8 @@ class RegisterController extends Controller
      *             required={"name", "email", "password", "password_confirmation"},
      *             @OA\Property(property="name", type="string", example="João Silva"),
      *             @OA\Property(property="email", type="string", format="email", example="joao@exemplo.com"),
-     *             @OA\Property(property="password", type="string", format="password", example="123456789"),
-     *             @OA\Property(property="password_confirmation", type="string", format="password", example="123456789")
+     *             @OA\Property(property="password", type="string", format="password", example="MinhaSenh@123"),
+     *             @OA\Property(property="password_confirmation", type="string", format="password", example="MinhaSenh@123")
      *         )
      *     ),
      *     @OA\Response(
@@ -44,34 +46,45 @@ class RegisterController extends Controller
      *         response=422,
      *         description="Erro de validação",
      *         @OA\JsonContent(
-     *             @OA\Property(property="message", type="string", example="The given data was invalid."),
+     *             @OA\Property(property="message", type="string", example="Os dados fornecidos são inválidos."),
      *             @OA\Property(property="errors", type="object")
      *         )
      *     )
      * )
      */
-    public function store(Request $request): \Illuminate\Http\JsonResponse
+    public function store(RegisterRequest $request): JsonResponse
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:8|confirmed',
-        ]);
+        try {
+            // Os dados já estão validados pelo RegisterRequest
+            $validated = $request->validated();
 
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-        ]);
+            $user = User::create([
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'password' => Hash::make($validated['password']),
+            ]);
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+            $token = $user->createToken('auth-token')->plainTextToken;
 
-        return response()->json([
-            'user' => $user,
-            'token' => $token
-        ], 201);
+            $this->logInfo('Usuário registrado com sucesso', [
+                'user_id' => $user->id,
+                'email' => $user->email
+            ]);
+
+            return response()->json([
+                'user' => $user,
+                'token' => $token
+            ], 201);
+
+        } catch (\Exception $e) {
+            $this->logError('Erro inesperado no registro', [
+                'error' => $e->getMessage(),
+                'email' => $request->email
+            ]);
+
+            return response()->json([
+                'message' => 'Ocorreu um erro interno. Tente novamente mais tarde.'
+            ],  $e->getCode());
+        }
     }
-
-
-
 }

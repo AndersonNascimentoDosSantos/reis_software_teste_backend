@@ -5,11 +5,22 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreTaskRequest;
 use App\Http\Requests\UpdateTaskRequest;
 use App\Models\Task;
+
+use App\Services\Logging\StructuredLogger;
+use App\Traits\Loggable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Validation\ValidationException;
 
 class TaskController extends Controller
 {
+    use Loggable;
+
+    public function __construct(
+        private readonly StructuredLogger $logger
+    ) {}
+
     /**
      * @OA\Get(
      *     path="/api/tasks",
@@ -52,18 +63,34 @@ class TaskController extends Controller
      *     )
      * )
      */
-    public function index(Request $request)
+    public function index(Request $request): JsonResponse
     {
-        $query = Auth::user()->tasks();
+        try {
+            $query = Task::where('user_id', Auth::id());
 
-        // Filtrar por status se fornecido
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
+            if ($request->has('status')) {
+                $query->where('status', $request->status);
+            }
+
+            $tasks = $query->get();
+
+            $this->logInfo('Listagem de tarefas realizada', [
+                'user_id' => Auth::id(),
+                'filter' => $request->status ?? 'all',
+                'count' => $tasks->count()
+            ]);
+
+            return response()->json($tasks);
+        } catch (\Exception $e) {
+            $this->logError('Erro ao listar tarefas', [
+                'user_id' => Auth::id(),
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'message' => 'Ocorreu um erro ao listar as tarefas.'
+            ], 500);
         }
-
-        $tasks = $query->orderBy('created_at', 'desc')->get();
-
-        return response()->json($tasks);
     }
 
     /**
@@ -112,23 +139,48 @@ class TaskController extends Controller
      *         )
      *     )
      * )
+     * @throws ValidationException
      */
-    public function store(StoreTaskRequest $request)
+    public function store(StoreTaskRequest $request): JsonResponse
     {
-        $validated = $request->validated();
-//        $validated = $request->validate([
-//            'title' => 'required|string|max:255',
-//            'description' => 'required|string',
-//            'status' => 'sometimes|in:pending,completed',
-//            'due_date' => 'nullable|date|after_or_equal:now'
-//        ]);
 
-        $validated['user_id'] = Auth::id();
-        $validated['status'] = $validated['status'] ?? 'pending';
 
-        $task = Task::create($validated);
+        try {
+            $validated = $request->validated();
+            $validated['user_id'] = Auth::id();
+            $validated['status'] = $validated['status']??"pending";
+             $task = Task::create($validated);
 
-        return response()->json($task, 201);
+
+            $this->logInfo('Tarefa criada com sucesso', [
+                'user_id' => Auth::id(),
+                'task_id' => $task->id,
+                'status' => $task->status
+            ]);
+
+            return response()->json($task, 201);
+
+        } catch (ValidationException $e) {
+
+//            dd( $e->errors());
+            $this->logError('Erro de validação ao criar tarefa', [
+                'user_id' => Auth::id(),
+                'errors' => $e->errors()
+            ]);
+
+            $this->logError('Erro ao criar tarefa', [
+                'user_id' => Auth::id(),
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'message' => 'Ocorreu um erro ao criar a tarefa.',
+                'trace' =>   $e->getTrace(),
+                'linha' => $e->getLine(),
+            ], 500);
+        }
+
+
     }
 
     /**
@@ -181,15 +233,38 @@ class TaskController extends Controller
      *     )
      * )
      */
-    public function show($id)
+    public function show(Task $task): JsonResponse
     {
-        $task = Task::where('user_id', Auth::id())->find($id);
+        try {
+            if ($task->user_id !== Auth::id()) {
+                $this->logWarning('Tentativa de acesso não autorizado a tarefa', [
+                    'user_id' => Auth::id(),
+                    'task_id' => $task->id
+                ]);
 
-        if (!$task) {
-            return response()->json(['message' => 'Task not found.'], 404);
+                return response()->json([
+                    'message' => 'Não autorizado.'
+                ], 403);
+            }
+
+            $this->logInfo('Tarefa visualizada', [
+                'user_id' => Auth::id(),
+                'task_id' => $task->id
+            ]);
+
+            return response()->json($task);
+
+        } catch (\Exception $e) {
+            $this->logError('Erro ao visualizar tarefa', [
+                'user_id' => Auth::id(),
+                'task_id' => $task->id,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'message' => 'Ocorreu um erro ao visualizar a tarefa.'
+            ], 500);
         }
-
-        return response()->json($task);
     }
 
     /**
@@ -252,25 +327,54 @@ class TaskController extends Controller
      *     )
      * )
      */
-    public function update(UpdateTaskRequest $request, $id)
-
+    public function update(UpdateTaskRequest $request, Task $task): JsonResponse
     {
-        $task = Task::where('user_id', Auth::id())->find($id);
+        try {
+            if ($task->user_id !== Auth::id()) {
 
-        if (!$task) {
-            return response()->json(['message' => 'Task not found.'], 404);
+                $this->logWarning('Tentativa de atualização não autorizada de tarefa', [
+                    'user_id' => Auth::id(),
+                    'task_id' => $task->id
+                ]);
+
+                return response()->json([
+                    'message' => 'Não autorizado.'
+                ], 403);
+            }
+
+            $validated = $request->validated();
+
+            $task->update($validated);
+
+            $this->logInfo('Tarefa atualizada com sucesso', [
+                'user_id' => Auth::id(),
+                'task_id' => $task->id,
+                'changes' => $validated
+            ]);
+
+            return response()->json($task);
+        } catch (\Exception $e) {
+            if ($e instanceof ValidationException) {
+                $this->logError('Erro de validação ao atualizar tarefa', [
+                    'user_id' => Auth::id(),
+                    'task_id' => $task->id,
+                    'errors' => $e->errors()
+                ]);
+
+                // Re-throw para manter o comportamento original
+                throw $e;
+            } else {
+                $this->logError('Erro ao atualizar tarefa', [
+                    'user_id' => Auth::id(),
+                    'task_id' => $task->id,
+                    'error' => $e->getMessage()
+                ]);
+
+                return response()->json([
+                    'message' => 'Ocorreu um erro ao atualizar a tarefa.'
+                ], 500);
+            }
         }
-
-        $validated = $request->validate([
-            'title' => 'sometimes|required|string|max:255',
-            'description' => 'sometimes|required|string',
-            'status' => 'sometimes|in:pending,completed',
-            'due_date' => 'nullable|date|after_or_equal:now'
-        ]);
-
-        $task->update($validated);
-
-        return response()->json($task);
     }
 
     /**
@@ -309,16 +413,101 @@ class TaskController extends Controller
      *     )
      * )
      */
-    public function destroy($id)
+    public function destroy(Task $task): JsonResponse
     {
-        $task = Task::where('user_id', Auth::id())->find($id);
+        try {
+            if ($task->user_id !== Auth::id()) {
+                $this->logWarning('Tentativa de exclusão não autorizada de tarefa', [
+                    'user_id' => Auth::id(),
+                    'task_id' => $task->id
+                ]);
 
-        if (!$task) {
-            return response()->json(['message' => 'Task not found.'], 404);
+                return response()->json([
+                    'message' => 'Não autorizado.'
+                ], 403);
+            }
+
+            $task->delete();
+
+            $this->logInfo('Tarefa excluída com sucesso', [
+                'user_id' => Auth::id(),
+                'task_id' => $task->id
+            ]);
+
+            return response()->json(null, 204);
+
+        } catch (\Exception $e) {
+
+            $this->logError('Erro ao excluir tarefa', [
+                'user_id' => Auth::id(),
+                'task_id' => $task->id,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'message' => 'Ocorreu um erro ao excluir a tarefa.'
+            ], 500);
         }
+    }
 
-        $task->delete();
+    public function restore(int $id): JsonResponse
+    {
+        try {
+            $task = Task::withTrashed()->findOrFail($id);
 
-        return response()->json(['message' => 'Task deleted successfully.']);
+            if ($task->user_id !== Auth::id()) {
+                $this->logWarning('Tentativa de restauração não autorizada de tarefa', [
+                    'user_id' => Auth::id(),
+                    'task_id' => $task->id
+                ]);
+
+                return response()->json([
+                    'message' => 'Não autorizado.'
+                ], 403);
+            }
+
+            $task->restore();
+
+            $this->logInfo('Tarefa restaurada com sucesso', [
+                'user_id' => Auth::id(),
+                'task_id' => $task->id
+            ]);
+
+            return response()->json($task);
+        } catch (\Exception $e) {
+            $this->logError('Erro ao restaurar tarefa', [
+                'user_id' => Auth::id(),
+                'task_id' => $id,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'message' => 'Ocorreu um erro ao restaurar a tarefa.'
+            ], 500);
+        }
+    }
+
+    public function trashed(): JsonResponse
+    {
+        try {
+            $tasks = Task::where('user_id', Auth::id())
+                ->softDeleted()->get();
+
+            $this->logInfo('Listagem de tarefas excluídas realizada', [
+                'user_id' => Auth::id(),
+                'count' => $tasks->count()
+            ]);
+
+            return response()->json($tasks);
+        } catch (\Exception $e) {
+            $this->logError('Erro ao listar tarefas excluídas', [
+                'user_id' => Auth::id(),
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'message' => 'Ocorreu um erro ao listar as tarefas excluídas.'
+            ], 500);
+        }
     }
 }

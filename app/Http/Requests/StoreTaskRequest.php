@@ -20,7 +20,7 @@ class StoreTaskRequest extends FormRequest
             'title' => 'required|string|max:255',
             'description' => 'required|string',
             'status' => 'sometimes|in:pending,completed',
-            'due_date' => 'nullable|date|after_or_equal:now'
+            'due_date' => 'required|date|after_or_equal:now'
         ];
     }
     protected function failedValidation(Validator $validator)
