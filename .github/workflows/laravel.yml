@@ -30,10 +30,15 @@ jobs:
     - uses: shivammathur/setup-php@15c43e89cdef867065b0213be354c2841860869e
       with:
         php-version: '8.4'
-        extensions: pdo, pdo_pgsql, pgsql
+        extensions: pdo, pdo_pgsql, pgsql, mbstring, xml, ctype, json, tokenizer
         ini-values: extension=pdo_pgsql.so, extension=pgsql.so
         coverage: none
         tools: composer:v2
+    
+    - name: Disable SQL Server extensions
+      run: |
+        sudo sed -i '/extension=.*sqlsrv/d' /etc/php/8.4/cli/php.ini || true
+        sudo sed -i '/extension=.*pdo_sqlsrv/d' /etc/php/8.4/cli/php.ini || true
     
     - name: Copy .env
       run: php -r "file_exists('.env') || copy('.env.example', '.env');"
@@ -64,7 +69,7 @@ jobs:
         DB_PASSWORD: postgres
       run: php artisan migrate --force
     
-    - name: Execute tests (Unit and Feature tests) via PHPUnit/Pest
+    - name: Execute tests (Unit and Feature tests) via PHPUnit
       env:
         DB_CONNECTION: pgsql
         DB_HOST: localhost
@@ -72,4 +77,4 @@ jobs:
         DB_DATABASE: laravel_test
         DB_USERNAME: postgres
         DB_PASSWORD: postgres
-      run: php artisan test
+      run: vendor/bin/phpunit
